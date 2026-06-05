@@ -21,8 +21,10 @@ import {
   Mic,
   MonitorPlay,
   GraduationCap,
+  LayoutDashboard,
 } from 'lucide-react';
 import SafeImage from '../components/SafeImage.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } };
 const fadeUp = {
@@ -71,6 +73,14 @@ const TESTIMONIALS = [
 const UNIVERSITIES = ['Stanford', 'MIT', 'Cambridge', 'Harvard', 'Oxford', 'ETH Zürich', 'Wharton', 'Berklee'];
 
 export default function Home() {
+  const { user } = useAuth();
+  const dashPath =
+    user?.role === 'tutor'
+      ? '/tutor/dashboard'
+      : user?.role === 'admin'
+      ? '/admin'
+      : '/student/dashboard';
+
   return (
     <div className="overflow-hidden">
       {/* ============== HERO ============== */}
@@ -127,12 +137,32 @@ export default function Home() {
             </motion.p>
 
             <motion.div variants={fadeUp} className="mt-9 flex flex-col sm:flex-row gap-3">
-              <Link to="/tutors" className="btn-primary">
-                <Search className="w-4 h-4" /> Find your tutor
-              </Link>
-              <Link to="/register" className="btn-ghost">
-                Become a tutor <ArrowRight className="w-4 h-4" />
-              </Link>
+              {!user && (
+                <>
+                  <Link to="/tutors" className="btn-primary">
+                    <Search className="w-4 h-4" /> Find your tutor
+                  </Link>
+                  <Link to="/register" className="btn-ghost">
+                    Become a tutor <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </>
+              )}
+              {user?.role === 'student' && (
+                <>
+                  <Link to="/tutors" className="btn-primary">
+                    <Search className="w-4 h-4" /> Find your tutor
+                  </Link>
+                  <Link to="/student/dashboard" className="btn-ghost">
+                    <LayoutDashboard className="w-4 h-4" /> My lessons
+                  </Link>
+                </>
+              )}
+              {(user?.role === 'tutor' || user?.role === 'admin') && (
+                <Link to={dashPath} className="btn-primary">
+                  <LayoutDashboard className="w-4 h-4" />
+                  {user.role === 'tutor' ? 'Go to Tutor Hub' : 'Go to Admin Console'}
+                </Link>
+              )}
             </motion.div>
 
             <motion.div variants={fadeUp} className="mt-12 flex items-center gap-5">

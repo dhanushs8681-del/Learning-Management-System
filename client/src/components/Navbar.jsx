@@ -1,6 +1,17 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { GraduationCap, LogOut, LayoutDashboard, User, CreditCard, Menu, X } from 'lucide-react';
+import {
+  GraduationCap,
+  LogOut,
+  LayoutDashboard,
+  User,
+  CreditCard,
+  Menu,
+  X,
+  Search,
+  BookOpen,
+  Shield,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -15,10 +26,42 @@ export default function Navbar() {
     navigate('/');
   };
 
-  const links = [
-    { to: '/', label: 'Home' },
-    { to: '/tutors', label: 'Find Tutors' },
-  ];
+  // Role-aware primary navigation
+  const getLinks = () => {
+    const base = [{ to: '/', label: 'Home', icon: GraduationCap }];
+    if (!user) {
+      // Visitors can explore tutors before signing up
+      return [...base, { to: '/tutors', label: 'Find Tutors', icon: Search }];
+    }
+    if (user.role === 'student') {
+      return [
+        ...base,
+        { to: '/tutors', label: 'Find Tutors', icon: Search },
+        { to: '/student/dashboard', label: 'My Lessons', icon: BookOpen },
+      ];
+    }
+    if (user.role === 'tutor') {
+      return [
+        ...base,
+        { to: '/tutor/dashboard', label: 'Tutor Hub', icon: BookOpen },
+      ];
+    }
+    if (user.role === 'admin') {
+      return [
+        ...base,
+        { to: '/admin', label: 'Admin Console', icon: Shield },
+      ];
+    }
+    return base;
+  };
+
+  const links = getLinks();
+
+  const roleBadge = {
+    student: { label: 'Student', cls: 'border-brand-400/30 text-brand-300 bg-brand-500/10' },
+    tutor: { label: 'Tutor', cls: 'border-purple-400/30 text-purple-300 bg-purple-500/10' },
+    admin: { label: 'Admin', cls: 'border-emerald-400/30 text-emerald-300 bg-emerald-500/10' },
+  };
 
   return (
     <header className="sticky top-0 z-40">
@@ -56,9 +99,11 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-3">
             {user ? (
               <>
-                <Link to="/dashboard" className="btn-ghost text-sm">
-                  <LayoutDashboard className="w-4 h-4" /> Dashboard
-                </Link>
+                {roleBadge[user.role] && (
+                  <span className={`chip border ${roleBadge[user.role].cls}`}>
+                    {roleBadge[user.role].label}
+                  </span>
+                )}
                 <Link to="/profile" className="btn-ghost text-sm">
                   <User className="w-4 h-4" /> {user.name.split(' ')[0]}
                 </Link>
@@ -97,7 +142,13 @@ export default function Navbar() {
             ))}
             {user ? (
               <>
-                <Link to="/dashboard" onClick={() => setOpen(false)} className="block px-3 py-2 rounded-lg text-white/80 hover:bg-white/5">Dashboard</Link>
+                {roleBadge[user.role] && (
+                  <div className="px-3 py-2">
+                    <span className={`chip border ${roleBadge[user.role].cls}`}>
+                      {roleBadge[user.role].label} account
+                    </span>
+                  </div>
+                )}
                 <Link to="/profile" onClick={() => setOpen(false)} className="block px-3 py-2 rounded-lg text-white/80 hover:bg-white/5">Profile</Link>
                 <Link to="/payments" onClick={() => setOpen(false)} className="block px-3 py-2 rounded-lg text-white/80 hover:bg-white/5">Payments</Link>
                 <button onClick={handleLogout} className="w-full text-left px-3 py-2 rounded-lg text-white/80 hover:bg-white/5">Logout</button>

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, SlidersHorizontal, Loader2, X } from 'lucide-react';
+import { Search, SlidersHorizontal, Loader2, X, Briefcase, ShieldAlert } from 'lucide-react';
 import api from '../lib/api';
 import TutorCard from '../components/TutorCard.jsx';
 import PageContainer from '../components/PageContainer.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 export default function TutorList() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tutors, setTutors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +54,32 @@ export default function TutorList() {
   const activeFilterCount = Object.entries(filters).filter(
     ([k, v]) => v !== '' && v != null && !(k === 'sort' && v === 'rating_desc')
   ).length;
+
+  // RBAC: tutors and admins don't book lessons — browsing tutors is a student action.
+  if (user && user.role !== 'student') {
+    return (
+      <PageContainer>
+        <div className="card p-12 max-w-lg mx-auto text-center">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-purple-500/15 border border-purple-400/20 grid place-items-center">
+            <Briefcase className="w-7 h-7 text-purple-300" />
+          </div>
+          <h1 className="font-display text-2xl font-bold mt-5">This area is for students</h1>
+          <p className="text-white/60 mt-2">
+            You're signed in as a <span className="capitalize font-semibold text-white/80">{user.role}</span>.
+            Browsing and booking tutors is a student feature.
+          </p>
+          <div className="mt-6 flex justify-center gap-2">
+            <Link
+              to={user.role === 'tutor' ? '/tutor/dashboard' : '/admin'}
+              className="btn-primary text-sm"
+            >
+              Go to my {user.role === 'tutor' ? 'Tutor Hub' : 'Admin Console'}
+            </Link>
+          </div>
+        </div>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>

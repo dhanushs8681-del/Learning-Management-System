@@ -7,10 +7,27 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-export async function createCheckoutSession(req, res) {
-  if (!stripe) {
-    return res.status(500).json({ message: 'Stripe not configured on server' });
+// When no Stripe key is configured we run a built-in "demo checkout" so the
+// full payment flow still works end-to-end (book → pay → confirm → join class).
+const DEMO_MODE = !stripe;
+
+async function markPaid(payment) {
+  if (payment.status === 'succeeded') return;
+  payment.status = 'succeeded';
+  await payment.save();
+
+  const lesson = await Lesson.findById(payment.lesson);
+  if (lesson) {
+    lesson.paymentStatus = 'paid';
+    lesson.status = 'paid';
+    await lesson.save();
   }
+  await User.findByIdAndUpdate(payment.tutor, {
+    $inc: { 'tutorProfile.earnings': payment.amount },
+  });
+}
+
+export async function createCheckoutSession(req, res) {
   const { lessonId } = req.body;
   const lesson = await Lesson.findById(lessonId).populate('tutor', 'name email');
   if (!lesson) return res.status(404).json({ message: 'Lesson not found' });
@@ -21,6 +38,25 @@ export async function createCheckoutSession(req, res) {
     return res.status(400).json({ message: 'Lesson already paid' });
   }
 
+  // ---- DEMO MODE (no Stripe key) ----
+  if (DEMO_MODE) {
+    const sessionId = `demo_${lesson._id}_${Date.now()}`;
+    await Payment.create({
+      student: req.user._id,
+      tutor: lesson.tutor._id,
+      lesson: lesson._id,
+      amount: lesson.price,
+      sessionId,
+      status: 'pending',
+    });
+    lesson.paymentSessionId = sessionId;
+    await lesson.save();
+
+    const url = `${process.env.CLIENT_URL}/payment/success?session_id=${sessionId}&lesson=${lesson._id}&demo=1`;
+    return res.json({ url, sessionId, demo: true });
+  }
+
+  // ---- REAL STRIPE ----
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],
@@ -62,30 +98,23 @@ export async function createCheckoutSession(req, res) {
 }
 
 export async function confirmPayment(req, res) {
-  if (!stripe) return res.status(500).json({ message: 'Stripe not configured' });
   const { sessionId } = req.body;
   if (!sessionId) return res.status(400).json({ message: 'sessionId required' });
 
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
   const payment = await Payment.findOne({ sessionId });
   if (!payment) return res.status(404).json({ message: 'Payment not found' });
 
-  if (session.payment_status === 'paid' && payment.status !== 'succeeded') {
-    payment.status = 'succeeded';
-    await payment.save();
-
-    const lesson = await Lesson.findById(payment.lesson);
-    if (lesson) {
-      lesson.paymentStatus = 'paid';
-      lesson.status = 'paid';
-      await lesson.save();
-    }
-
-    await User.findByIdAndUpdate(payment.tutor, {
-      $inc: { 'tutorProfile.earnings': payment.amount },
-    });
+  // ---- DEMO MODE confirm ----
+  if (sessionId.startsWith('demo_') || DEMO_MODE) {
+    await markPaid(payment);
+    return res.json({ payment, status: 'paid', demo: true });
   }
 
+  // ---- REAL STRIPE confirm ----
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  if (session.payment_status === 'paid') {
+    await markPaid(payment);
+  }
   res.json({ payment, status: session.payment_status });
 }
 
